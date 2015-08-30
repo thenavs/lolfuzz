@@ -1,0 +1,5 @@
+# this allows powershell remoting to a spawned guest, use ansible-vault if you care
+ansible_ssh_user: ansible
+ansible_ssh_pass: ansible
+ansible_ssh_port: 5986
+#ansible_connection: winrm # this is broken, use -c winrm w/ ansible command

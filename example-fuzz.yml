@@ -1,0 +1,17 @@
+###
+# fuzz run playbook, add workers..define configuration etc..
+###
+- hosts: example-fuzz # set this to workers group
+  gather_facts: no   
+  sudo: no
+  vars:
+    vsphere_hostname: vcenter-host # resolvable hostname of your vsphere/vcenter host
+    vm_hdd_size:  25      # 25GB ought to be enough for anyone
+    vm_network: FuzzNAT   # set this to the name of the network you want your VMs on
+    
+  roles:
+     - common      # unused but probably a good idea
+     - vsphere-win # setup for unattended os install and vmx creation
+     - fuzzvm-win8 # install debugging tools and such
+
+# now install the SUT  

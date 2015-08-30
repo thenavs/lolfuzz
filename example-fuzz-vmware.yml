@@ -1,0 +1,16 @@
+- hosts: example-fuzz
+  gather_facts: false
+  tasks:
+    - vsphere_guest:
+        vcenter_hostname: vcenter-host
+        username: "{{ vsphere_username }}"
+        password: "{{ vsphere_password }}"
+        guest: "{{ inventory_hostname }}"
+        vmware_guest_facts: yes
+      delegate_to: localhost
+      register: vmguest_facts
+      tags: vmfacts
+
+    - name: debug facts
+      debug: msg="vmguest facts are {{ vmguest_facts }}"
+      tags: vmfacts

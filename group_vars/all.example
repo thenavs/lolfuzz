@@ -1,0 +1,3 @@
+# you should encrypt this file using ansible-vault irl
+vsphere_username: YOUR_USERNAME
+vsphere_password: YOUR_PASSWORD

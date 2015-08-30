@@ -1,0 +1,39 @@
+#- name: pswindowsupdate
+#  win_chocolatey:
+#    name: pswindowsupdate
+#    state: present
+#- name: install git
+#   win_chocolatey:
+#        name: git -y
+#        state: present
+#- name: install vmware-tools
+#  win_chocolatey:
+#    name: vmware-tools
+#    state: present
+#- name: sysinternals
+#  win_chocolatey:
+#    name: sysinternals
+#    state: present
+#- name: security updates #XXX: broken see below
+#  win_updates:
+#    category: security
+    # ansible-modules-extras/#275
+- name: "Enable Powershell script execution"
+  raw: powershell -ExecutionPolicy ByPass -Command Set-ExecutionPolicy ByPass -force
+
+# NOTE: win_updates not working as expected, created scheduled job fix
+- name: "Invoke Windows Update"
+  script: Invoke-Windows-Update.ps1 #XXX: should use relative path
+
+# NOTE: can we please get wait_for path in Windows !
+#       retry for 60 min, every 15 sec, 3600/15 = 240 retries
+- name: "Waiting for Windows Update to complete"
+  win_stat: path=C:\PSWindowsUpdate.DONE
+  register: shell_output
+  until: shell_output.stat.exists == true
+  retries: 240
+  delay: 15
+- raw: powershell -ExecutionPolicy ByPass -Command Get-Content C:\PSWindowsUpdate.DONE
+
+- name: "Disabled Powershell script execution"
+  raw: powershell -Command Set-ExecutionPolicy Restricted -force

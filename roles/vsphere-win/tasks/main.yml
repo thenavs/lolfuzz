@@ -1,0 +1,106 @@
+# Create a new VM on an ESX server
+# Returns changed = False when the VM already exists
+# Returns changed = True and a adds ansible_facts from the new VM
+# State will set the power status of a guest upon creation. Use powered_on to create and boot.
+# Options ['state', 'vm_extra_config', 'vm_disk', 'vm_nic', 'vm_hardware', 'esxi'] are required together
+- name: set up working area
+  connection: local
+  shell: mktemp -d
+  register: workdir
+- file: path="{{ workdir.stdout }}/mnt" state=directory mode=0755
+  connection: local
+- name: create floppy image
+  connection: local
+  shell: dd if=/dev/zero bs=1k count=1440 of="{{ workdir.stdout }}/{{ inventory_hostname }}.flp"
+- name: format floppy image
+  connection: local
+  command: mkfs -t vfat "{{ workdir.stdout }}/{{ inventory_hostname }}.flp"
+- name: mount floppy image
+  connection: local
+  sudo: true
+  command: mount "{{ workdir.stdout }}/{{ inventory_hostname }}.flp" "{{ workdir.stdout }}/mnt"  -t vfat
+- name: create unattend.xml
+  connection: local
+  sudo: true
+  template: src=Autounattend.xml.j2 dest="{{ workdir.stdout }}/mnt/Autounattend.xml"
+- name: copy over powershell/winrm helper
+  connection: local
+  sudo: true 
+  template: src=ConfigureRemotingForAnsible.ps1 dest="{{ workdir.stdout }}/mnt/ConfigureRemotingForAnsible.ps1"
+- name: unmount floppy image
+  connection: local
+  sudo: true
+  command: umount "{{ workdir.stdout }}/mnt"
+- name: copy floppy image to esxi datastore
+  delegate_to: "{{ vsphere_hostname }}"
+  copy: src="{{ workdir.stdout }}/{{ inventory_hostname }}.flp" dest="/vmfs/volumes/datastore1/_UNATTENDED/{{ inventory_hostname }}.flp" owner=root group=root mode=0600
+- name: remove workdir 
+  connection: local
+  file: name={{ workdir.stdout }} state=absent
+
+- name: create vmx on esxi server
+  connection: local
+  vsphere_guest:
+    vcenter_hostname: "{{ vsphere_hostname }}"
+    username: "{{ vsphere_username }}"
+    password: "{{ vsphere_password }}"
+    guest: "{{ inventory_hostname }}"
+    state: powered_off
+    vm_hw_version: vmx-08 # preserve compatibility with standalone client
+    #resource_pool: fuzz
+    #cluster: UNKNOWN XXX
+    vm_extra_config:
+      vcpu.hotadd: yes
+      mem.hotadd:  yes
+      bios.bootOrder: "hdd,cdrom" # ignored for now
+      notes: provisioned by ansible
+    vm_disk:
+      disk1:
+        size_gb: "{{ vm_hdd_size|default(25) }}"
+        type: thin
+        datastore: fast
+    vm_nic:
+      nic1:
+        type: e1000e # for compatibility without vmware tools
+        network: "{{ vm_network }}"
+        network_type: standard
+    vm_hardware:
+      memory_mb: "{{ vm_mem_size|default(2048) }}"
+      num_cpus: "{{ vm_cpu_count|default(2) }}"
+      osid: windows8_64Guest
+      scsi: lsi_sas
+      vm_cdrom:
+        type: "iso"
+        iso_path: "datastore1/_ISOS/9600.17050.WINBLUE_REFRESH.140317-1640_X64FRE_ENTERPRISE_EVAL_EN-US-IR3_CENA_X64FREE_EN-US_DV9.ISO"
+      vm_floppy:
+        type: "image"
+        image_path: "datastore1/_UNATTENDED/{{ inventory_hostname }}.flp"
+    esxi:
+      datacenter: ha-datacenter
+      hostname: "{{ vsphere_hostname }}"
+- name: wait for vm to be available # this should be changed to a do/until w/ retries count
+  connection: local
+  pause: minutes=1
+- name: fix boot order
+  connection: local
+  shell: python /etc/ansible/roles/vsphere-win/scripts/boot_order.py
+  environment:
+    vsphere_hostname: "{{ vsphere_hostname }}"
+    vm_hostname: "{{ inventory_hostname }}"
+    vsphere_username: "{{ vsphere_username }}"
+    vsphere_password: "{{ vsphere_password }}"
+  register: boot_order
+
+- name: wait for vm to be available
+  connection: local
+  pause: minutes=1
+- name: boot the new instance
+  connection: local
+  vsphere_guest:
+    vcenter_hostname: "{{ vsphere_hostname }}"
+    username: "{{ vsphere_username }}"
+    password: "{{ vsphere_password }}"
+    guest: "{{ inventory_hostname }}"
+    state: powered_on
+#XXX: bug w/ connection:local/winrm ...  at this point we should enable winrm under inventory connection flags
+# vim:ft=ansible:

@@ -1,0 +1,8 @@
+[esxi-hosts]
+# hostname            # options             # ip                 
+vcenter-host          ansible_ssh_user=root ansible_ssh_host=192.168.1.20
+
+
+# add nodes here 
+[example-fuzz]
+fuzz-win8-[01:02]
